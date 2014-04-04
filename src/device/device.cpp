@@ -161,6 +161,7 @@ void CDevice::Process()
       if (!WriteOutput())
       {
         //make sure to wait at least one second before trying to set up again
+        Log("%s: io operation failed, retry to setup", m_name.c_str());
         USleep(Max(1000000LL - (GetTimeUs() - setuptime), 0));
         break;
       }

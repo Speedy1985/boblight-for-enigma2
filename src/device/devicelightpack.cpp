@@ -27,7 +27,7 @@
 #define LIGHTPACK_VID       0x1D50
 #define LIGHTPACK_PID       0x6022
 #define LIGHTPACK_INTERFACE 0
-#define LIGHTPACK_TIMEOUT   100
+#define LIGHTPACK_TIMEOUT   200
 
 int get_serial_number(libusb_device *dev, const libusb_device_descriptor &descriptor, char *buf, size_t size);
 
@@ -82,9 +82,9 @@ bool CDeviceLightpack::SetupDevice()
       char serial[USBDEVICE_SERIAL_SIZE];
       error = get_serial_number(devicelist[i], descriptor, serial, USBDEVICE_SERIAL_SIZE);
       if (error > 0)
-        Log("%s: found Lightpack at bus %d address %d, serial is %s", m_name.c_str(), busnumber, deviceaddress, serial);
+        Log("%s: probing Lightpack at bus %d address %d, serial is %s", m_name.c_str(), busnumber, deviceaddress, serial);
       else
-        Log("%s: found Lightpack at bus %d address %d. Couldn't get serial.", m_name.c_str(), busnumber, deviceaddress);
+        Log("%s: probing Lightpack at bus %d address %d. Couldn't get serial.", m_name.c_str(), busnumber, deviceaddress);
 
 
       if (m_devicehandle == NULL
@@ -175,20 +175,26 @@ bool CDeviceLightpack::WriteOutput()
     m_buf[idx++] = b & 0x0f;
   }
 
-  if (idx < 61)
-    memset(m_buf + idx, 0, 61 - idx);
+  if (idx < LIGHTPACK_REPORT_SIZE)
+    memset(m_buf + idx, 0, LIGHTPACK_REPORT_SIZE - idx);
 
-  int result = libusb_control_transfer(m_devicehandle,
+  int result = 0;
+  int numRetries = 0;
+  const int kNumRetries = 3;
+
+  while (result != LIGHTPACK_REPORT_SIZE && numRetries++ < kNumRetries) {
+      result = libusb_control_transfer(m_devicehandle,
                                        LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_CLASS
                                        | LIBUSB_RECIPIENT_INTERFACE,
                                        0x09,
                                        (2 << 8),
                                        0x00,
-                                       m_buf, 61, LIGHTPACK_TIMEOUT);
+                                       m_buf, LIGHTPACK_REPORT_SIZE, LIGHTPACK_TIMEOUT);
+  }
 
   m_timer.Wait();
 
-  return result == 61;
+  return result == LIGHTPACK_REPORT_SIZE;
 }
 
 bool CDeviceLightpack::DisableSmoothness()
